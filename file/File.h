@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <string>
+#include <sstream>
 
 struct Entry {
   Entry() : name(nullptr), dir(false) {}
@@ -55,10 +56,23 @@ struct File {
 
   std::string path() {
     // TODO: platform?
+
     char fullpath[MAXPATHLEN];
+#ifdef __APPLE__
     if (fcntl(dfd, F_GETPATH, fullpath) < 0) {
-      fullpath[0] = '0';
+      fullpath[0] = '\0';
     }
+#elif __linux__
+    std::ostringstream out;
+    out << "/proc/self/fd/" << dfd;
+    const ssize_t len = ::readlink(out.str().c_str(), fullpath, MAXPATHLEN-1);
+    if (len != -1) {
+      fullpath[len] = '\0';
+    }
+    else {
+      fullpath[0] = '\0';
+    }
+#endif
     return fullpath;
   }
 

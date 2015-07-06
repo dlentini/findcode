@@ -37,7 +37,7 @@ ssize_t fastsearch_memchr_1char(const char *s, ssize_t n, char ch,
   const char *ptr = s;
   const char *e = s + n;
   while (ptr < e) {
-    void *candidate =
+    const void *candidate =
         memchr((const void *)ptr, needle, (e - ptr) * sizeof(char));
     if (candidate == NULL)
       return -1;

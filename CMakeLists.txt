@@ -5,6 +5,8 @@ include_directories ("${PROJECT_SOURCE_DIR}")
 
 add_subdirectory (taskpool)
 
+set(Boost_USE_STATIC_LIBS ON)
+
 find_package(Boost 1.36.0 COMPONENTS program_options)
 if(Boost_FOUND)
   include_directories(${Boost_INCLUDE_DIRS})
@@ -12,5 +14,9 @@ if(Boost_FOUND)
   target_link_libraries(ext ${Boost_LIBRARIES})
 endif()
 
-set(CMAKE_CXX_FLAGS "-std=c++11 -stdlib=libc++ -Wall -Wextra -Wno-unused-parameter")
+if(CMAKE_SYSTEM_NAME MATCHES ".*Linux")
+  SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pthread")
+endif()
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra -Wno-unused-parameter")
 target_link_libraries (ext taskpool)
