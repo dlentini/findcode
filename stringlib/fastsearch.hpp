@@ -52,6 +52,7 @@ ssize_t fastsearch_memchr_1char(const char *s, ssize_t n, char ch,
 
 class fastsearch {
 public:
+  constexpr fastsearch() : p(nullptr), m(0), mlast(0), skip(0), mask(0) {}
   fastsearch(const char *pattern_begin, const char *pattern_end)
       : p(pattern_begin), m(std::distance(pattern_begin, pattern_end)) {
     if (m > 1) {
@@ -60,6 +61,11 @@ public:
       mask = 0;
       build_table();
     }
+  }
+
+  template<typename Range>
+  const char *operator()(const Range& corpus) {
+    return operator()(corpus.data(), corpus.data() + corpus.size());
   }
 
   const char *operator()(const char *corpus_begin, const char *corpus_end) {
@@ -163,18 +169,21 @@ const char *fast_search(const char *corpus_first, const char *corpus_last,
   return fs(corpus_first, corpus_last);
 }
 
+template<typename Range>
 const char *fast_search(const char *corpus_first, const char *corpus_last,
-                        const std::string &pattern) {
-  fastsearch fs(pattern.c_str(), pattern.c_str() + pattern.size());
+                        const Range &pattern) {
+  fastsearch fs(pattern.data(), pattern.data() + pattern.size());
   return fs(corpus_first, corpus_last);
 }
 
-const char *fast_search(const std::string &corpus, const std::string &pattern) {
-  fastsearch fs(pattern.c_str(), pattern.c_str() + pattern.size());
-  return fs(corpus.c_str(), corpus.c_str() + corpus.size());
+template<typename CorpusRange, typename PatternRange>
+const char *fast_search(const CorpusRange &corpus, const PatternRange &pattern) {
+  fastsearch fs(pattern.data(), pattern.data() + pattern.size());
+  return fs(corpus);
 }
 
-fastsearch make_fast_search(const std::string &pattern) {
-  return fastsearch(pattern.c_str(), pattern.c_str() + pattern.size());
+template<typename Range>
+fastsearch make_fast_search(const Range &pattern) {
+  return fastsearch(pattern.data(), pattern.data() + pattern.size());
 }
 }

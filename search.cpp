@@ -2,26 +2,29 @@
 
 #include <taskpool/Async.h>
 #include <file/File.h>
-
-#include <boost/algorithm/searching/boyer_moore.hpp>
 #include <stringlib/fastsearch.hpp>
 
+#include <boost/utility/string_ref.hpp>
+
 #include <sstream>
+#include <iostream>
 
 using namespace parallel;
 
 // Global vars
-std::string g_begin_path;
-std::string g_path;
-std::string g_name;
+boost::string_ref g_begin_path;
+boost::string_ref g_path;
+boost::string_ref g_name;
 bool g_list;
-bool g_nocolor;
 bool g_quick;
 
 namespace {
 std::mutex printf_mtx;
-std::string sgr_start = "\33[01;31m";
-std::string sgr_end = "\33[0m";
+const char sgr_start[] = "\33[01;31m";
+const char sgr_end[] = "\33[0m";
+const char g_extensions[] = "h hh hpp c cc cpp txt ";
+boost::string_ref g_color_name;
+stringlib::fastsearch search;
 }
 
 const char *rfind_newline(const char *begin, const char *stop) {
@@ -32,37 +35,44 @@ const char *rfind_newline(const char *begin, const char *stop) {
   return begin == stop ? stop : begin + 2;
 }
 
-std::string build_path(File &file) {
-  return g_path + file.path().substr(g_begin_path.size());
+boost::string_ref make_string_ref(const char* begin, const char* end) {
+  return boost::string_ref(begin, end - begin);
 }
 
-std::string name() { return g_nocolor ? g_name : sgr_start + g_name + sgr_end; }
+boost::string_ref name() { return g_color_name; }
 
-const char *Build(File &file, std::ostringstream &out, const char *found,
+// TODO: Fix this function!
+std::string build_path(File &file) {
+  char fullpath[MAXPATHLEN];
+  file.path(fullpath);
+  std::ostringstream out;
+  out << g_path
+      << boost::string_ref(fullpath).substr(g_begin_path.size());
+  return out.str();
+}
+
+const char *build(File &file, std::ostringstream &out, const char *found,
                   const char *begin, const char *end) {
   const char *first = rfind_newline(found, begin);
   const char *last = (char *)memchr(found, '\n', end - found);
-  out << build_path(file) << ": " << std::string(first, found) << name()
-      << std::string(found + g_name.size(), last) << '\n';
+  out << build_path(file) << ": " << make_string_ref(first, found) << name()
+      << make_string_ref(found + g_name.size(), last) << '\n';
   return last;
 }
 
 void SearchFnc(int fd, const char *path) {
   File file(fd, path);
-  auto corpus = file.map();
+  boost::string_ref corpus = file.map();
 
-  auto search = stringlib::make_fast_search(g_name);
-  // auto search = boost::algorithm::make_boyer_moore(g_name);
-
-  const char *found = corpus.first;
-  const char *begin = corpus.first;
+  const char *found = corpus.begin();
+  const char *begin = corpus.begin();
   std::ostringstream out;
   do {
-    found = search(begin, corpus.second);
-    if (found != corpus.second) {
-      begin = Build(file, out, found, corpus.first, corpus.second);
+    found = search(begin, corpus.end());
+    if (found != corpus.end()) {
+      begin = build(file, out, found, corpus.begin(), corpus.end());
     }
-  } while (!g_quick && found != corpus.second);
+  } while (!g_quick && found != corpus.end());
 
   std::lock_guard<std::mutex> lck(printf_mtx);
   std::cout << out.str();
@@ -75,8 +85,8 @@ void PrintFnc(std::string entry) {
     if (g_name.empty())
       out << entry << '\n';
     else
-      out << std::string(entry.c_str(), found) << name()
-          << std::string(found + g_name.size(), entry.c_str() + entry.size())
+      out << make_string_ref(entry.c_str(), found) << name()
+          << make_string_ref(found + g_name.size(), entry.c_str() + entry.size())
           << '\n';
 
     std::lock_guard<std::mutex> lck(printf_mtx);
@@ -86,8 +96,8 @@ void PrintFnc(std::string entry) {
 
 struct Filter {
   bool operator()(const Entry &entry) {
-    static std::string extensions = "h hh hpp c cc cpp txt ";
-    name = entry.name;
+    boost::string_ref extensions = g_extensions;
+    boost::string_ref name = entry.name;
     const size_t ext = name.find_last_of('.');
     if (!entry.dir &&
         (ext == std::string::npos ||
@@ -96,7 +106,6 @@ struct Filter {
     }
     return false;
   }
-  std::string name;
 };
 
 void FileFnc(int fd, const char *path) {
@@ -113,8 +122,20 @@ void FileFnc(int fd, const char *path) {
   }
 }
 
-void start_search() {
+void start_search(bool no_color) {
+  std::string color_name;
+  if (no_color) {
+    g_color_name = g_name;
+  } else {
+    std::ostringstream out;
+    out << sgr_start << g_name << sgr_end;
+    color_name = out.str();
+    g_color_name = color_name;
+  }
+
+  search = stringlib::make_fast_search(g_name);
+
   TaskCompletion completion;
-  async(FileFnc, &completion, -1, g_begin_path.c_str());
+  async(FileFnc, &completion, -1, g_begin_path.data());
   WorkerThread::current()->work_until_done(&completion);
 }

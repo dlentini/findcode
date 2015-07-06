@@ -12,6 +12,8 @@
 #include <string>
 #include <sstream>
 
+#include <boost/utility/string_ref.hpp>
+
 struct Entry {
   Entry() : name(nullptr), dir(false) {}
   Entry(const char *name, bool dir) : name(name), dir(dir) {}
@@ -34,9 +36,11 @@ struct File {
   template <typename Filter> Entry *next_entry(Filter filter) {
     struct dirent *dirp;
     struct stat sb;
+    static const boost::string_ref parent = "..";
+    static const boost::string_ref current = ".";
     while (dir && (dirp = readdir(dir)) != NULL) {
       entry.name = dirp->d_name;
-      if (std::string("..") == entry.name || std::string(".") == entry.name) {
+      if (parent == entry.name || current == entry.name) {
         continue;
       }
       if (fstatat(dfd, entry.name, &sb, 0) == -1) {
@@ -54,10 +58,9 @@ struct File {
     return nullptr;
   }
 
-  std::string path() {
+  void path(char fullpath[MAXPATHLEN]) {
     // TODO: platform?
 
-    char fullpath[MAXPATHLEN];
 #ifdef __APPLE__
     if (fcntl(dfd, F_GETPATH, fullpath) < 0) {
       fullpath[0] = '\0';
@@ -73,24 +76,21 @@ struct File {
       fullpath[0] = '\0';
     }
 #endif
-    return fullpath;
   }
 
-  std::pair<const char *, const char *> map() {
-    char *corpus_begin = nullptr;
-    char *corpus_end = nullptr;
+  boost::string_ref map() {
+    boost::string_ref corpus;
     struct stat statbuf;
     const int rv = fstat(dfd, &statbuf);
     if (rv == 0) {
       const off_t size = statbuf.st_size;
       char *result = (char *)mmap(0, size, PROT_READ, MAP_SHARED, dfd, 0);
       if (result != MAP_FAILED) {
-        corpus_begin = result;
-        corpus_end = corpus_begin + size;
-        madvise(corpus_begin, size, MADV_SEQUENTIAL);
+        corpus = boost::string_ref(result, size);
+        madvise(result, size, MADV_SEQUENTIAL);
       }
     }
-    return {corpus_begin, corpus_end};
+    return corpus;
   }
 
   int dfd;
