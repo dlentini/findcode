@@ -1,0 +1,3 @@
+[submodule "stringlib"]
+	path = stringlib
+	url = https://github.com/dlentini/stringlib.git
