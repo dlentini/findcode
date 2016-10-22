@@ -1,3 +1,6 @@
 [submodule "stringlib"]
 	path = stringlib
 	url = https://github.com/dlentini/stringlib.git
+[submodule "taskpool"]
+	path = taskpool
+	url = https://github.com/dlentini/taskpool.git

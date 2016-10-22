@@ -1,8 +1,8 @@
 /* search -- */
 
-#include <taskpool/Async.h>
-#include <file/File.h>
-#include <stringlib/fastsearch.hpp>
+#include "taskpool/Async.h"
+#include "file/File.h"
+#include "stringlib/fastsearch.hpp"
 
 #include <boost/utility/string_ref.hpp>
 
@@ -19,7 +19,6 @@ bool g_list;
 bool g_quick;
 
 namespace {
-std::mutex printf_mtx;
 const char sgr_start[] = "\33[01;31m";
 const char sgr_end[] = "\33[0m";
 const char g_extensions[] = "h hh hpp c cc cpp txt ";
@@ -40,6 +39,12 @@ boost::string_ref make_string_ref(const char* begin, const char* end) {
 }
 
 boost::string_ref name() { return g_color_name; }
+
+void outs(const std::ostringstream& oss) {
+  static std::mutex cout_mtx;
+  std::lock_guard<std::mutex> lck(cout_mtx);
+  std::cout << oss.str();
+}
 
 // TODO: Fix this function!
 std::string build_path(File &file) {
@@ -74,8 +79,7 @@ void SearchFnc(int fd, const char *path) {
     }
   } while (!g_quick && found != corpus.end());
 
-  std::lock_guard<std::mutex> lck(printf_mtx);
-  std::cout << out.str();
+  outs(out);
 }
 
 void PrintFnc(std::string entry) {
@@ -89,8 +93,7 @@ void PrintFnc(std::string entry) {
           << make_string_ref(found + g_name.size(), entry.c_str() + entry.size())
           << '\n';
 
-    std::lock_guard<std::mutex> lck(printf_mtx);
-    std::cout << out.str();
+    outs(out);
   }
 }
 
